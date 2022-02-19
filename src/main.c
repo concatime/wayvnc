@@ -109,7 +109,7 @@ struct wayvnc {
 
 void wayvnc_exit(struct wayvnc* self);
 void on_capture_done(enum screencopy_result result, struct wv_buffer* buffer,
-	       void* userdata);
+		struct wv_buffer* cursor, void* userdata);
 
 #if defined(GIT_VERSION)
 static const char wayvnc_version[] = GIT_VERSION;
@@ -165,6 +165,7 @@ static void registry_add(void* data, struct wl_registry* registry,
 		return;
 	}
 
+#if 1
 	if (strcmp(interface, zext_screencopy_manager_v1_interface.name) == 0) {
 		self->ext_screencopy_manager =
 			wl_registry_bind(registry, id,
@@ -172,6 +173,7 @@ static void registry_add(void* data, struct wl_registry* registry,
 					 MIN(1, version));
 		return;
 	}
+#endif
 
 	if (strcmp(interface, zwlr_virtual_pointer_manager_v1_interface.name) == 0) {
 		self->pointer_manager =
@@ -632,7 +634,8 @@ static uint32_t calculate_region_area(struct pixman_region16* region)
 	return area;
 }
 
-void wayvnc_process_frame(struct wayvnc* self, struct wv_buffer* buffer)
+void wayvnc_process_frame(struct wayvnc* self, struct wv_buffer* buffer,
+		struct wv_buffer* cursor)
 {
 	// TODO: Back buffer used to be set to NULL here, what's that about?
 
@@ -663,6 +666,9 @@ void wayvnc_process_frame(struct wayvnc* self, struct wv_buffer* buffer)
 
 	nvnc_display_feed_buffer(self->nvnc_display, buffer->nvnc_fb,
 			&damage);
+	if (cursor)
+		nvnc_set_cursor(self->nvnc, cursor->nvnc_fb, cursor->x_hotspot,
+				cursor->y_hotspot, &cursor->frame_damage);
 
 	pixman_region_fini(&damage);
 
@@ -670,7 +676,7 @@ void wayvnc_process_frame(struct wayvnc* self, struct wv_buffer* buffer)
 }
 
 void on_capture_done(enum screencopy_result result, struct wv_buffer* buffer,
-	       void* userdata)
+		struct wv_buffer* cursor, void* userdata)
 {
 	struct wayvnc* self = userdata;
 
@@ -683,7 +689,7 @@ void on_capture_done(enum screencopy_result result, struct wv_buffer* buffer,
 		wayvnc_start_capture_immediate(self);
 		break;
 	case SCREENCOPY_DONE:
-		wayvnc_process_frame(self, buffer);
+		wayvnc_process_frame(self, buffer, cursor);
 		break;
 	}
 }
@@ -1008,6 +1014,8 @@ int main(int argc, char* argv[])
 		if (!self.screencopy)
 			goto screencopy_failure;
 
+		log_debug("Using zext_screencopy_unstable_v1\n");
+
 		self.screencopy->rate_limit = max_rate;
 	} else if (self.screencopy_manager) {
 		self.screencopy = screencopy_create(&wlr_screencopy_impl,
@@ -1016,6 +1024,8 @@ int main(int argc, char* argv[])
 				overlay_cursor, on_capture_done, &self);
 		if (!self.screencopy)
 			goto screencopy_failure;
+
+		log_debug("Using wlr_screencopy_unstable_v1\n");
 
 		self.screencopy->rate_limit = max_rate;
 	} else {
@@ -1027,7 +1037,7 @@ int main(int argc, char* argv[])
 		data_control_init(&self.data_control, self.display, self.nvnc,
 				self.selected_seat->wl_seat);
 
-	if (wayvnc_start_capture(&self) < 0)
+	if (wayvnc_start_capture_immediate(&self) < 0)
 		goto capture_failure;
 
 	if (show_performance)
