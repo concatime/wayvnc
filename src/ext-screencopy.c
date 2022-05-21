@@ -123,10 +123,12 @@ static void ext_screencopy_schedule_capture(struct ext_screencopy* self,
 
 		if (pixman_region_not_empty(&self->cursor_buffer->buffer_damage))
 			ext_screencopy_surface_v1_damage_cursor_buffer(
-					self->surface, "default");
+					self->surface, "default",
+					EXT_SCREENCOPY_SURFACE_V1_INPUT_TYPE_POINTER);
 
 		ext_screencopy_surface_v1_attach_cursor_buffer(self->surface,
-				self->cursor_buffer->wl_buffer, "default");
+				self->cursor_buffer->wl_buffer, "default",
+				EXT_SCREENCOPY_SURFACE_V1_INPUT_TYPE_POINTER);
 	}
 
 	ext_screencopy_surface_v1_commit(self->surface, flags);
@@ -166,11 +168,16 @@ static void surface_handle_buffer_info(void *data,
 
 static void surface_handle_cursor_buffer_info(void *data,
 		struct ext_screencopy_surface_v1 *surface, const char *name,
+		enum ext_screencopy_surface_v1_input_type input_type,
 		enum ext_screencopy_surface_v1_buffer_type type,
 		uint32_t format, uint32_t width, uint32_t height,
 		uint32_t stride)
 {
 	struct ext_screencopy* self = data;
+
+	if (input_type != EXT_SCREENCOPY_SURFACE_V1_INPUT_TYPE_POINTER) {
+		return;
+	}
 
 	switch (type) {
 	case EXT_SCREENCOPY_SURFACE_V1_BUFFER_TYPE_WL_SHM:
@@ -345,10 +352,15 @@ static void surface_handle_damage(void *data,
 
 static void surface_handle_cursor_info(void *data,
 		struct ext_screencopy_surface_v1 *surface, const char *name,
+		enum ext_screencopy_surface_v1_input_type input_type,
 		int has_damage, int32_t pos_x, int32_t pos_y, int32_t width,
 		int32_t height, int32_t hotspot_x, int32_t hotspot_y)
 {
 	struct ext_screencopy* self = data;
+
+	if (input_type != EXT_SCREENCOPY_SURFACE_V1_INPUT_TYPE_POINTER) {
+		return;
+	}
 
 	if (has_damage) {
 		log_debug("Got a new cursor\n");
@@ -362,7 +374,9 @@ static void surface_handle_cursor_info(void *data,
 }
 
 static void surface_handle_cursor_enter(void *data,
-		struct ext_screencopy_surface_v1 *surface, const char *name)
+		struct ext_screencopy_surface_v1 *surface, const char *name,
+		enum ext_screencopy_surface_v1_input_type input_type)
+
 {
 	struct ext_screencopy* self = data;
 
@@ -370,7 +384,8 @@ static void surface_handle_cursor_enter(void *data,
 }
 
 static void surface_handle_cursor_leave(void *data,
-		struct ext_screencopy_surface_v1 *surface, const char *name)
+		struct ext_screencopy_surface_v1 *surface, const char *name,
+		enum ext_screencopy_surface_v1_input_type input_type)
 {
 	struct ext_screencopy* self = data;
 
